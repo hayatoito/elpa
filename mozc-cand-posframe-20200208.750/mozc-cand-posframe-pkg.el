@@ -1,0 +1,2 @@
+;;; Generated package description from mozc-cand-posframe.el  -*- no-byte-compile: t -*-
+(define-package "mozc-cand-posframe" "20200208.750" "Posframe frontend for mozc.el" '((emacs "26.1") (posframe "0.5.0") (mozc "20180101.800") (s "1.12")) :commit "1d07d5055381008ccbb29b97315d140e09a7ee95" :authors '(("Akira Komamura" . "akira.komamura@gmail.com")) :maintainer '("Akira Komamura" . "akira.komamura@gmail.com") :keywords '("i18n" "tooltip") :url "https://github.com/akirak/mozc-posframe")
