@@ -48,6 +48,10 @@
   :link '(url-link "https://codeberg.org/akib/emacs-corfu-terminal")
   :prefix "corfu-terminal-")
 
+;; [2024-10-14 Mon] hayato: Manual patch, which can be overwritten by upstream.
+(defvar corfu-terminal-mode nil
+  "Non-nil if Corfu-Terminal mode is enabled.")
+
 (defcustom corfu-terminal-enable-on-minibuffer t
   "Non-nil means enable corfu-terminal on minibuffer."
   :type 'boolean)
