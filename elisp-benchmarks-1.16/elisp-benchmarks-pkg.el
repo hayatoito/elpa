@@ -1,0 +1,2 @@
+;; Generated package description from elisp-benchmarks.el  -*- no-byte-compile: t -*-
+(define-package "elisp-benchmarks" "1.16" "elisp benchmarks collection" 'nil :commit "1a3d97954957a95a179806e0d49ca6d178b097af" :url "https://elpa.gnu.org/packages/elisp-benchmarks.html" :authors '(("Andrea Corallo" . "acorallo@gnu.org")) :maintainer '("Andrea Corallo" . "acorallo@gnu.org") :keywords '("languages" "lisp"))
