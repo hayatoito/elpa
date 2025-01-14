@@ -5,7 +5,7 @@
 ;; Author: Feng Shu <tumashu@163.com>
 ;; Maintainer: Feng Shu <tumashu@163.com>
 ;; URL: https://github.com/tumashu/vertico-posframe
-;; Version: 0.7.7
+;; Version: 0.7.8
 ;; Keywords: abbrev, convenience, matching, vertico
 ;; Package-Requires: ((emacs "26.0") (posframe "1.4.0") (vertico "1.1"))
 
@@ -130,7 +130,7 @@ When 0, no border is showed."
 
 (defcustom vertico-posframe-parameters nil
   "The frame parameters used by vertico-posframe."
-  :type 'string)
+  :type '(alist :key-type symbol :value-type sexp))
 
 (defcustom vertico-posframe-show-minibuffer-rules
   (list "^eval-*")
@@ -180,6 +180,9 @@ minibuffer will not be hided by minibuffer-cover."
   :group 'vertico-posframe)
 
 (defvar vertico-posframe--buffer nil)
+(defvar vertico-posframe--use-auto-hscroll-mode-p nil)
+(defvar vertico-posframe--use-vertico--resize-p nil)
+
 
 ;; Fix warn
 (defvar exwm--connection)
@@ -239,10 +242,35 @@ vertico-posframe works with vertico multiform toggle."
   ;; `vertico--resize-window' have set `max-mini-window-height' to
   ;; 1.0, so I think setting it to 1.0 here is safe :-).
   (setq-local max-mini-window-height 1.0)
-  (posframe-hide vertico-posframe--buffer))
+  ;; Before hide vertico-posframe, we should clean window hscroll
+  ;; effect, to handle long path issue:
+  ;; https://github.com/tumashu/vertico-posframe/issues/37
+  (posframe-funcall
+   vertico-posframe--buffer
+   (lambda ()
+     (setf (window-hscroll) 0)
+     (when vertico-posframe--use-auto-hscroll-mode-p
+       (kill-local-variable 'auto-hscroll-mode)
+       (setq-local vertico-posframe--use-auto-hscroll-mode-p nil))))
+  (posframe-hide vertico-posframe--buffer)
+  ;; Handle vertico--resize-window rename to vertico--resize, will
+  ;; remove in future.
+  (when (and (functionp 'vertico--resize)
+             (not vertico-posframe--use-vertico--resize-p))
+    (cl-defmethod vertico--resize
+      (&context ((vertico-posframe-mode-workable-p) (eql t))))
+    (setq vertico-posframe--use-vertico--resize-p t)))
 
-(cl-defmethod vertico--resize-window
-  (_height &context ((vertico-posframe-mode-workable-p) (eql t))))
+;; vertico--resize-window has been renamed to vertico--resize in commit:
+;; https://github.com/minad/vertico/commit/5c4a2cbe9916c2761bfb56ac129eb4b8f9210b22
+;; We handle both here.
+(when (functionp 'vertico--resize-window)
+  (cl-defmethod vertico--resize-window
+    (_height &context ((vertico-posframe-mode-workable-p) (eql t)))))
+
+(when (functionp 'vertico--resize)
+  (cl-defmethod vertico--resize
+    (&context ((vertico-posframe-mode-workable-p) (eql t)))))
 
 (cl-defmethod vertico--display-candidates
   :after (_candidates &context ((vertico-posframe-mode-workable-p) (eql t)))
@@ -290,9 +318,14 @@ vertico-posframe works with vertico multiform toggle."
 (defun vertico-posframe--show (buffer window-point)
   "`posframe-show' of vertico-posframe."
   (with-selected-window (vertico-posframe-last-window) ;Some posframe poshandlers need infos of last-window.
+    (with-current-buffer buffer
+      (unless (local-variable-p 'auto-hscroll-mode)
+        (setq-local auto-hscroll-mode 'current-line)
+        (setq-local vertico-posframe--use-auto-hscroll-mode-p t)))
     (apply #'posframe-show
            buffer
            :cursor 'box
+           :tty-non-selected-cursor t
            :window-point window-point
            :font (buffer-local-value 'vertico-posframe-font buffer)
            ;; Variable settings in `vertico-multiform-commands' will
