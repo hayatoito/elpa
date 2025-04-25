@@ -201,7 +201,7 @@ information if the stream contains it."
                   (cl-loop
                    for tool-call in tool-use ; Construct the call specs for running the function calls
                    for spec = (plist-get tool-call :function)
-                   collect (list :id (gptel--openai-unformat-tool-id (plist-get tool-call :id))
+                   collect (list :id (plist-get tool-call :id)
                                  :name (plist-get spec :name)
                                  :args (ignore-errors (gptel--json-read-string
                                                        (plist-get spec :arguments))))
@@ -210,7 +210,7 @@ information if the stream contains it."
               (when-let* ((response (gptel--json-read))
                           (delta (map-nested-elt response '(:choices 0 :delta))))
                 (if-let* ((content (plist-get delta :content))
-                          ((not (eq content :null))))
+                          ((not (or (eq content :null) (string-empty-p content)))))
                     (push content content-strs)
                   ;; No text content, so look for tool calls
                   (when-let* ((tool-call (map-nested-elt delta '(:tool_calls 0)))
@@ -274,7 +274,7 @@ Mutate state INFO with response metadata."
                                         (gptel--json-read-string
                                          (plist-get call-spec :arguments))))
            (plist-put call-spec :arguments nil)
-           (plist-put call-spec :id (gptel--openai-unformat-tool-id (plist-get tool-call :id)))
+           (plist-put call-spec :id (plist-get tool-call :id))
            collect call-spec into tool-use
            finally (plist-put info :tool-use tool-use)))))))
 
@@ -289,7 +289,7 @@ Mutate state INFO with response metadata."
            :messages [,@prompts]
            :stream ,(or gptel-stream :json-false)))
         (reasoning-model-p ; TODO: Embed this capability in the model's properties
-         (memq gptel-model '(o1 o1-preview o1-mini o3-mini o3))))
+         (memq gptel-model '(o1 o1-preview o1-mini o3-mini o3 o4-mini))))
     (when (and gptel-temperature (not reasoning-model-p))
       (plist-put prompts-plist :temperature gptel-temperature))
     (when gptel-use-tools
@@ -322,15 +322,19 @@ Mutate state INFO with response metadata."
    (lambda (tool-call)
      (list
       :role "tool"
-      :tool_call_id (gptel--openai-format-tool-id
-                     (plist-get tool-call :id))
+      :tool_call_id (plist-get tool-call :id)
       :content (plist-get tool-call :result)))
    tool-use))
 
+;; TODO: Remove these functions (#792)
 (defun gptel--openai-format-tool-id (tool-id)
   "Format TOOL-ID for OpenAI.
 
 If the ID has the format used by a different backend, use as-is."
+  (unless tool-id
+    (setq tool-id (substring
+                   (md5 (format "%s%s" (random) (float-time)))
+                   nil 24)))
   (if (or (string-prefix-p "toolu_" tool-id) ;#747
           (string-prefix-p "call_"  tool-id))
       tool-id
@@ -380,7 +384,7 @@ If the ID has the format used by a different backend, use as-is."
                      (push (list :role "assistant"
                                  :tool_calls
                                  (vector (list :type "function"
-                                               :id (gptel--openai-format-tool-id id)
+                                               :id id
                                                :function `( :name ,name
                                                             :arguments ,arguments))))
                            prompts))

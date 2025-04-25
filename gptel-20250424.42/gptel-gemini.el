@@ -157,23 +157,22 @@ TOOLS is a list of `gptel-tool' structs, which see."
     (if (not (gptel-tool-args tool))
          :null           ;NOTE: Gemini wants :null if the function takes no args
       (list :type "object"
+            ;; See the generic implementation for an explanation of this
+            ;; transformation.
             :properties
             (cl-loop
              for arg in (gptel-tool-args tool)
-             for name = (plist-get arg :name)
-             for type = (plist-get arg :type)
+             for argspec = (copy-sequence arg)
+             for name = (plist-get arg :name) ;handled differently
              for newname = (or (and (keywordp name) name)
                                (make-symbol (concat ":" name)))
-             for enum = (plist-get arg :enum)
-             append (list newname
-                          `(:type ,(plist-get arg :type)
-                            :description ,(plist-get arg :description)
-                            ,@(if enum (list :enum (vconcat enum)))
-                            ,@(cond
-                               ((equal type "object")
-                                (list :parameters (plist-get arg :parameters)))
-                               ((equal type "array")
-                                (list :items (plist-get arg :items)))))))
+             do                        ;ARGSPEC is ARG without unrecognized keys
+             (cl-remf argspec :name)
+             (cl-remf argspec :optional)
+             if (equal (plist-get arg :type) "object")
+             do (unless (plist-member argspec :required)
+                  (plist-put argspec :required []))
+             append (list newname argspec))
             :required
             (vconcat
              (delq nil (mapcar
@@ -396,13 +395,31 @@ files in the context."
      :output-cost 0.00
      :cutoff-date "2024-08")
     (gemini-2.5-pro-exp-03-25
-     :description "Enhanced thinking and reasoning, multimodal understanding, advanced coding, and more"
+     :description "Like gemini-2.5-pro-preview-03-25 but limited to 5 req/min, 25 req/day"
      :capabilities (tool-use json media)
      :mime-types ("image/png" "image/jpeg" "image/webp" "image/heic" "image/heif"
                   "application/pdf" "text/plain" "text/csv" "text/html")
      :context-window 1000
      :input-cost 0.00
      :output-cost 0.00
+     :cutoff-date "2025-01")
+    (gemini-2.5-pro-preview-03-25
+     :description "Enhanced reasoning, multimodal understanding & advanced coding"
+     :capabilities (tool-use json media)
+     :mime-types ("image/png" "image/jpeg" "image/webp" "image/heic" "image/heif"
+                  "application/pdf" "text/plain" "text/csv" "text/html")
+     :context-window 1000
+     :input-cost 1.25 ; 2.50 for >200k tokens
+     :output-cost 10.00 ; 15 for >200k tokens
+     :cutoff-date "2025-01")
+    (gemini-2.5-flash-preview-04-17
+     :description "Best Gemini model in terms of price-performance, offering well-rounded capabilities"
+     :capabilities (tool-use json media)
+     :mime-types ("image/png" "image/jpeg" "image/webp" "image/heic" "image/heif"
+                  "application/pdf" "text/plain" "text/csv" "text/html")
+     :context-window 1000
+     :input-cost 0.15
+     :output-cost 0.60 ; 3.50 for thinking
      :cutoff-date "2025-01")
     (gemini-2.0-flash-thinking-exp
      :description "DEPRECATED: Please use gemini-2.0-flash-thinking-exp-01-21 instead."

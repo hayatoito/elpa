@@ -3,8 +3,8 @@
 ;; Copyright (C) 2023  Karthik Chikmagalur
 
 ;; Author: Karthik Chikmagalur <karthik.chikmagalur@gmail.com>
-;; Package-Version: 20250407.818
-;; Package-Revision: 55355bdead3d
+;; Package-Version: 20250424.42
+;; Package-Revision: 118431efeacf
 ;; Package-Requires: ((emacs "27.1") (transient "0.7.4") (compat "29.1.4.1"))
 ;; Keywords: convenience, tools
 ;; URL: https://github.com/karthink/gptel
@@ -35,7 +35,7 @@
 ;;
 ;; gptel supports:
 ;;
-;; - The services ChatGPT, Azure, Gemini, Anthropic AI, Anyscale, Together.ai,
+;; - The services ChatGPT, Azure, Gemini, Anthropic AI, Together.ai,
 ;;   Perplexity, Anyscale, OpenRouter, Groq, PrivateGPT, DeepSeek, Cerebras,
 ;;   Github Models, Novita AI, xAI and Kagi (FastGPT & Summarizer).
 ;; - Local models via Ollama, Llama.cpp, Llamafiles or GPT4All
@@ -482,8 +482,9 @@ of the response, with 2.0 being the most random.
 
 To set the temperature for a chat session interactively call
 `gptel-send' with a prefix argument."
-  :safe #'always
-  :type 'number)
+  :safe (lambda (v) (or (null v) (numberp v)))
+  :type '(choice (number :tag "Temperature value")
+                 (const :tag "Use default" nil)))
 
 (defcustom gptel-cache nil
   "Whether the LLM should cache request content.
@@ -538,6 +539,37 @@ the same as t."
      :input-cost 0.15
      :output-cost 0.60
      :cutoff-date "2023-10")
+    (gpt-4.1
+     :description "Flagship model for complex tasks"
+     :capabilities (media tool-use json url)
+     :mime-types ("image/jpeg" "image/png" "image/gif" "image/webp")
+     :context-window 1024
+     :input-cost 2.0
+     :output-cost 8.0
+     :cutoff-date "2024-05")
+    (gpt-4.5-preview
+     :description "DEPRECATED: Use gpt-4.1 instead"
+     :capabilities (media tool-use url)
+     :mime-types ("image/jpeg" "image/png" "image/gif" "image/webp")
+     :context-window 128
+     :input-cost 75
+     :output-cost 150
+     :cutoff-date "2023-10")
+    (gpt-4.1-mini
+     :description "Balance between intelligence, speed and cost"
+     :capabilities (media tool-use json url)
+     :mime-types ("image/jpeg" "image/png" "image/gif" "image/webp")
+     :context-window 1024
+     :input-cost 0.4
+     :output-cost 1.6)
+    (gpt-4.1-nano
+     :description "Fastest, most cost-effective GPT-4.1 model"
+     :capabilities (media tool-use json url)
+     :mime-types ("image/jpeg" "image/png" "image/gif" "image/webp")
+     :context-window 1024
+     :input-cost 0.10
+     :output-cost 0.40
+     :cutoff-date "2024-05")
     (gpt-4-turbo
      :description "Previous high-intelligence model"
      :capabilities (media tool-use url)
@@ -545,40 +577,15 @@ the same as t."
      :context-window 128
      :input-cost 10
      :output-cost 30
-     :cutoff-date "2023-12")
-    ;; points to gpt-4-0613
+     :cutoff-date "2023-11")
     (gpt-4
      :description "GPT-4 snapshot from June 2023 with improved function calling support"
      :mime-types ("image/jpeg" "image/png" "image/gif" "image/webp")
-     :capabilities (media tool-use url)
+     :capabilities (media url)
      :context-window 8.192
      :input-cost 30
      :output-cost 60
-     :cutoff-date "2023-09")
-    (gpt-4-turbo-preview
-     :description "Points to gpt-4-0125-preview"
-     :capabilities (media tool-use url)
-     :mime-types ("image/jpeg" "image/png" "image/gif" "image/webp")
-     :context-window 128
-     :input-cost 10
-     :output-cost 30
-     :cutoff-date "2023-12")
-    (gpt-4-0125-preview
-     :description "GPT-4 Turbo preview model intended to reduce cases of “laziness”"
-     :capabilities (media tool-use url)
-     :mime-types ("image/jpeg" "image/png" "image/gif" "image/webp")
-     :context-window 128
-     :input-cost 10
-     :output-cost 30
-     :cutoff-date "2023-12")
-    (gpt-4.5-preview
-     :description "Largest and most capable GPT model to date"
-     :capabilities (media tool-use url)
-     :mime-types ("image/jpeg" "image/png" "image/gif" "image/webp")
-     :context-window 128
-     :input-cost 75
-     :output-cost 150
-     :cutoff-date "2023-10")
+     :cutoff-date "2023-11")
     (o1
      :description "Reasoning model designed to solve hard problems across domains"
      :capabilities (media reasoning)
@@ -586,46 +593,37 @@ the same as t."
      :context-window 200
      :input-cost 15
      :output-cost 60
-     :cutoff-date "2023-10"
-     :request-params (:stream :json-false))
-    (o1-preview
-     :description "DEPRECATED: PLEASE USE o1"
-     :capabilities (nosystem media)
-     :mime-types ("image/jpeg" "image/png" "image/gif" "image/webp")
-     :context-window 128
-     :input-cost 15
-     :output-cost 60
-     :cutoff-date "2023-10"
-     :capabilities (nosystem reasoning)
-     :request-params (:stream :json-false))
+     :cutoff-date "2023-10")
     (o1-mini
      :description "Faster and cheaper reasoning model good at coding, math, and science"
      :context-window 128
      :input-cost 3
      :output-cost 12
      :cutoff-date "2023-10"
-     :capabilities (nosystem reasoning)
-     :request-params (:stream :json-false))
+     :capabilities (nosystem reasoning))
+    (o3
+     :description "Well-rounded and powerful model across domains"
+     :capabilities (reasoning media tool-use json url)
+     :mime-types ("image/jpeg" "image/png" "image/gif" "image/webp")
+     :context-window 200
+     :input-cost 10
+     :output-cost 40
+     :cutoff-date "2024-05")
     (o3-mini
      :description "High intelligence at the same cost and latency targets of o1-mini"
      :context-window 200
-     :input-cost 3
-     :output-cost 12
+     :input-cost 1.10
+     :output-cost 4.40
      :cutoff-date "2023-10"
-     :capabilities (reasoning)
-     :request-params (:stream :json-false))
-    ;; limited information available
-    (gpt-4-32k
-     :capabilities (tool-use)
-     :input-cost 60
-     :output-cost 120)
-    (gpt-4-1106-preview
-     :description "Preview model with improved function calling support"
-     :capabilities (tool-use)
-     :context-window 128
-     :input-cost 10
-     :output-cost 30
-     :cutoff-date "2023-04")
+     :capabilities (reasoning tool-use json))
+    (o4-mini
+     :description "Fast, effective reasoning with efficient performance in coding and visual tasks"
+     :capabilities (reasoning media tool-use json url)
+     :mime-types ("image/jpeg" "image/png" "image/gif" "image/webp")
+     :context-window 200
+     :input-cost 1.10
+     :output-cost 4.40
+     :cutoff-date "2024-05")
     (gpt-3.5-turbo
      :description "More expensive & less capable than GPT-4o-mini; use that instead"
      :capabilities (tool-use)
@@ -913,6 +911,21 @@ Later plists in the sequence take precedence over earlier ones."
         (setq rtn (plist-put rtn p v))))
     rtn))
 
+(defvar url-http-end-of-headers)
+(defvar url-http-response-status)
+(cl-defun gptel--url-retrieve (url &key method data headers)
+  "Retrieve URL synchronously with METHOD, DATA and HEADERS."
+  (declare (indent 1))
+  (let ((url-request-method (if (eq method'post) "POST" "GET"))
+        (url-request-data (encode-coding-string (gptel--json-encode data) 'utf-8))
+        (url-mime-accept-string "application/json")
+        (url-request-extra-headers
+         `(("content-type" . "application/json")
+           ,@headers)))
+    (with-current-buffer (url-retrieve-synchronously url 'silent)
+      (goto-char url-http-end-of-headers)
+      (gptel--json-read))))
+
 (defun gptel-auto-scroll ()
   "Scroll window if LLM response continues below viewport.
 
@@ -1119,7 +1132,8 @@ FILE is assumed to exist and be a regular file."
     (enh-ruby-mode . "Ruby")
     (yaml-mode     . "Yaml")
     (yaml-ts-mode  . "Yaml")
-    (rustic-mode   . "Rust"))
+    (rustic-mode   . "Rust")
+    (tuareg-mode   . "OCaml"))
   "Mapping from unconventionally named major modes to languages.
 
 This is used when generating system prompts for rewriting and
@@ -1514,7 +1528,11 @@ a tool, use `gptel-make-tool', which see."
   :group 'gptel
   :type '(repeat gptel-tool))
 
-(cl-defstruct (gptel-tool (:constructor gptel--make-tool)
+(cl-defstruct (gptel-tool (:constructor nil)
+                          (:constructor gptel--make-tool-internal
+                           (&key function name description args
+                                 async category confirm include
+                                 &allow-other-keys))
                           (:copier gptel--copy-tool))
   "Struct to specify tools for LLMs to run.
 
@@ -1523,29 +1541,43 @@ a (plain language) task.  If the LLM decides to use the tool to
 accomplish the task, gptel will run the tool and (optionally)
 feed the LLM the results.  You can add tools via
 `gptel-make-tool', which see."
-  function name description args async category confirm include)
-
-(define-advice gptel--make-tool (:filter-args (rest) preprocess-args)
-  "Convert symbol :type values to strings in the args in REST."
-  (cl-callf gptel--preprocess-tool-args (plist-get rest :args))
-  rest)
+  (function nil :type function :documentation "Function that runs the tool")
+  (name nil :type string :documentation "Tool name, snake_case recommended")
+  (description nil :type string :documentation "What the tool does, intended for the LLM")
+  (args nil :type list :documentation "List of plists specifying function arguments")
+  (async nil :type boolean :documentation "Whether the function runs asynchronously")
+  (category nil :type string :documentation "Use to group tools by purpose")
+  (confirm nil :type boolean :documentation "Seek confirmation before running tool?")
+  (include nil :type boolean :documentation "Include tool results in buffer?"))
 
 (defun gptel--preprocess-tool-args (spec)
   "Convert symbol :type values in tool SPEC to strings destructively."
-  (cond ((not (listp spec)) spec)
-        ((keywordp (car spec))
-         (let ((tail spec))
-           (while tail
-             (when (and (eq (car tail) :type) (symbolp (cadr tail)))
-               (setcar (cdr tail) (symbol-name (cadr tail))))
-             (when (listp (cadr tail))
-               (gptel--preprocess-tool-args (cadr tail)))
-             (setq tail (cddr tail)))
-           spec))
-        (t (dolist (element spec)
-             (when (listp element)
-               (gptel--preprocess-tool-args element)))
-           spec)))
+  ;; NOTE: Do not use `sequencep' here, as that covers strings too and breaks
+  ;; things.
+  (when (or (listp spec) (vectorp spec))
+    (cond
+     ((vectorp spec)
+      (cl-loop for element across spec
+               for idx upfrom 0
+               do (aset spec idx (gptel--preprocess-tool-args element))))
+     ((keywordp (car spec))
+      (let ((tail spec))
+        (while tail
+          (when (and (eq (car tail) :type) (symbolp (cadr tail)))
+            (setcar (cdr tail) (symbol-name (cadr tail))))
+          ;; TODO: Handle :enum ("provided" "as" "list") here, convert to
+          ;; :enum ["provided" "as" "array"]
+          (when (or (listp (cadr tail)) (vectorp (cadr tail)))
+            (gptel--preprocess-tool-args (cadr tail)))
+          (setq tail (cddr tail)))))
+     ((listp spec) (dolist (element spec)
+                     (when (listp element)
+                       (gptel--preprocess-tool-args element))))))
+  spec)
+
+(defun gptel--make-tool (&rest spec)
+  "Construct a gptel-tool according to SPEC."
+  (apply #'gptel--make-tool-internal (gptel--preprocess-tool-args spec)))
 
 (defvar gptel--known-tools nil
   "Alist of gptel tools arranged by category.
@@ -1697,29 +1729,27 @@ implementation, used by OpenAI-compatible APIs and Ollama."
              (list
               :parameters
               (list :type "object"
+                    ;; gptel's tool args spec is close to the JSON schema, except
+                    ;; that we use (:name "argname" ...)
+                    ;; instead of  (:argname (...)), and
+                    ;; (:optional t) for each arg instead of (:required [...])
+                    ;; for all args at once.  Handle this difference by
+                    ;; modifying a copy of the gptel tool arg spec.
                     :properties
                     (cl-loop
                      for arg in (gptel-tool-args tool)
-                     for name = (plist-get arg :name)
-                     for type = (plist-get arg :type)
+                     for argspec = (copy-sequence arg)
+                     for name = (plist-get arg :name) ;handled differently
                      for newname = (or (and (keywordp name) name)
                                        (make-symbol (concat ":" name)))
-                     for enum = (plist-get arg :enum)
-                     append
-                     (list newname
-                           `(:type ,type
-                             :description ,(plist-get arg :description)
-                             ,@(if enum (list :enum (vconcat enum)))
-                             ,@(cond
-                                ((equal type "object")
-                                 (list :properties (plist-get arg :properties)
-                                       :required (or (plist-get arg :required)
-                                                     (vector))
-                                       :additionalProperties :json-false))
-                                ((equal type "array")
-                                 ;; TODO(tool) If the item type is an object,
-                                 ;; add :additionalProperties to it
-                                 (list :items (plist-get arg :items)))))))
+                     do                ;ARGSPEC is ARG without unrecognized keys
+                     (cl-remf argspec :name)
+                     (cl-remf argspec :optional)
+                     if (equal (plist-get arg :type) "object")
+                     do (unless (plist-member argspec :required)
+                          (plist-put argspec :required []))
+                     (plist-put argspec :additionalProperties :json-false)
+                     append (list newname argspec))
                     :required
                     (vconcat
                      (delq nil (mapcar
@@ -1950,7 +1980,7 @@ buffer."
   ;; a second network request: gptel tests for the presence of these flags to
   ;; handle state transitions.  (NOTE: Don't add :token to this.)
   (let ((info (gptel-fsm-info fsm)))
-    (dolist (key '(:tool-success :tool-use :error :http-status))
+    (dolist (key '(:tool-success :tool-use :error :http-status :reasoning))
       (when (plist-get info key)
         (plist-put info key nil))))
   (funcall
@@ -1969,9 +1999,12 @@ Handle read-only buffers and run pre-response hooks (but only if
 the request succeeded)."
   (let* ((info (gptel-fsm-info fsm))
          (start-marker (plist-get info :position)))
-    (when (with-current-buffer (plist-get info :buffer)
-            (or buffer-read-only
-                (get-char-property start-marker 'read-only)))
+    (when (and
+           (memq (plist-get info :callback)
+                 '(gptel--insert-response gptel-curl--stream-insert-response))
+           (with-current-buffer (plist-get info :buffer)
+             (or buffer-read-only
+                 (get-char-property start-marker 'read-only))))
       (message "Buffer is read only, displaying reply in buffer \"*LLM response*\"")
       (display-buffer
        (with-current-buffer (get-buffer-create "*LLM response*")
@@ -2206,20 +2239,6 @@ responses (see STREAM).  In these cases, RESPONSE can be
 See `gptel--insert-response' for an example callback handling all
 cases.
 
-STREAM is a boolean that determines if the response should be
-streamed, as in `gptel-stream'.  If the model or the backend does
-not support streaming, this will be ignored.
-
-When streaming responses
-
-- CALLBACK will be called repeatedly with each RESPONSE text
-  chunk (a string) as it is received.
-- When the HTTP request ends successfully, CALLBACK will be
-  called with a RESPONSE argument of t to indicate success.
-- Similarly, CALLBACK will be called with
-  (reasoning . text-chunk) for each reasoning chunk, and
-  (reasoning . t) to indicate the end of the reasoning block.
-
 The INFO plist has (at least) the following keys:
 :data         - The request data included with the query
 :position     - marker at the point the request was sent, unless
@@ -2250,6 +2269,20 @@ Or, for just the response:
 If CALLBACK is omitted, the response is inserted at the point the
 request was sent.
 
+STREAM is a boolean that determines if the response should be
+streamed, as in `gptel-stream'.  If the model or the backend does
+not support streaming, this will be ignored.
+
+When streaming responses
+
+- CALLBACK will be called repeatedly with each RESPONSE text
+  chunk (a string) as it is received.
+- When the HTTP request ends successfully, CALLBACK will be
+  called with a RESPONSE argument of t to indicate success.
+- Similarly, CALLBACK will be called with
+  (reasoning . text-chunk) for each reasoning chunk, and
+  (reasoning . t) to indicate the end of the reasoning block.
+
 BUFFER and POSITION are the buffer and position (integer or
 marker) at which the response is inserted.  If a CALLBACK is
 specified, no response is inserted and these arguments are
@@ -2277,8 +2310,9 @@ IN-PLACE is a boolean used by the default callback when inserting
 the response to determine if delimiters are needed between the
 prompt and the response.
 
-If DRY-RUN is non-nil, construct and return the full query data
-as usual, but do not send the request.
+If DRY-RUN is non-nil, do not send the request.  Construct and
+return a state machine object that can be introspected and
+resumed.
 
 FSM is the state machine driving the request.  This can be used
 to define a custom request control flow, see `gptel-fsm' for
@@ -2762,7 +2796,9 @@ the response is inserted into the current buffer after point."
     (let ((proc-buf
            (url-retrieve (let ((backend-url (gptel-backend-url gptel-backend)))
                            (if (functionp backend-url)
-                               (funcall backend-url) backend-url))
+                               (with-current-buffer (plist-get info :buffer)
+                                 (funcall backend-url))
+                             backend-url))
                          (lambda (_)
                            (set-buffer-multibyte t)
                            (set-buffer-file-coding-system 'utf-8-unix)
@@ -2806,11 +2842,9 @@ RESPONSE is the parsed JSON of the response, as a plist.
 PROC-INFO is a plist with process information and other context.
 See `gptel-curl--get-response' for its contents.")
 
-(defvar url-http-end-of-headers)
-(defvar url-http-response-status)
 (defun gptel--url-parse-response (backend proc-info)
   "Parse response from BACKEND with PROC-INFO."
-  (when gptel-log-level             ;logging
+  (when gptel-log-level                 ;logging
     (save-excursion
       (goto-char url-http-end-of-headers)
       (when (eq gptel-log-level 'debug)
