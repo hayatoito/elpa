@@ -1,6 +1,6 @@
 ;;; gptel-anthropic.el ---  Anthropic AI suppport for gptel  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2023  Karthik Chikmagalur
+;; Copyright (C) 2023-2025  Karthik Chikmagalur
 
 ;; Author: Karthik Chikmagalur <karthikchikmagalur@gmail.com>
 
@@ -233,6 +233,7 @@ Mutate state INFO with response metadata."
     ;; Merge request params with model and backend params.
     (gptel--merge-plists
      prompts-plist
+     gptel--request-params
      (gptel-backend-request-params gptel-backend)
      (gptel--model-request-params  gptel-model))))
 
@@ -312,25 +313,44 @@ TOOL-USE is a list of plists containing tool names, arguments and call results."
            (match-string 1 tool-id))
       tool-id))
 
-(cl-defmethod gptel--parse-list ((_backend gptel-anthropic) prompt-list)
-  (cl-loop for text in prompt-list
-           for role = t then (not role)
-           if text
-           collect (list :role (if role "user" "assistant")
-                         :content `[(:type "text" :text ,text)])
-           into prompts
-           finally do
-           ;; cache messages if required: add cache_control to the last message
-           (if (and (or (eq gptel-cache t) (memq 'message gptel-cache))
-                    (gptel--model-capable-p 'cache))
-               (nconc (aref (plist-get (car (last prompts)) :content) 0)
-                      '(:cache_control (:type "ephemeral"))))
-           finally return prompts))
+(cl-defmethod gptel--parse-list ((backend gptel-anthropic) prompt-list)
+  (let ((full-prompt
+         (if (consp (car prompt-list))
+             (let ((prompts))
+               (dolist (entry prompt-list) ; Advanced format, list of lists
+                 (pcase entry
+                   (`(prompt . ,msg)
+                    (push (list :role "user"
+                                :content `[(:type "text" :text ,(or (car-safe msg) msg))])
+                          prompts))
+                   (`(response . ,msg)
+                    (push (list :role "assistant"
+                                :content `[(:type "text" :text ,(or (car-safe msg) msg))])
+                          prompts))
+                   (`(tool . ,call)
+                    (unless (plist-get call :id)
+                      (plist-put call :id (gptel--anthropic-format-tool-id nil)))
+                    (push (list :role "assistant"
+                                :content `[( :type "tool_use" :id ,(plist-get call :id)
+                                             :name ,(plist-get call :name)
+                                             :input ,(plist-get call :args))])
+                          prompts)
+                    (push (gptel--parse-tool-results backend (list (cdr entry))) prompts))))
+               (nreverse prompts))
+           (cl-loop for text in prompt-list ; Simple format, list of strings
+                    for role = t then (not role)
+                    if text
+                    collect (list :role (if role "user" "assistant")
+                                  :content `[(:type "text" :text ,text)])))))
+    ;; cache messages if required: add cache_control to the last message
+    (when (and (or (eq gptel-cache t) (memq 'message gptel-cache))
+               (gptel--model-capable-p 'cache))
+      (nconc (aref (plist-get (car (last full-prompt)) :content) 0)
+             '(:cache_control (:type "ephemeral"))))
+    full-prompt))
 
 (cl-defmethod gptel--parse-buffer ((backend gptel-anthropic) &optional max-entries)
-  (let ((prompts) (prev-pt (point))
-        (include-media (and gptel-track-media (or (gptel--model-capable-p 'media)
-                                                  (gptel--model-capable-p 'url)))))
+  (let ((prompts) (prev-pt (point)))
     (if (or gptel-mode gptel-track-response)
         (while (and (or (not max-entries) (>= max-entries 0))
                     (goto-char (previous-single-property-change
@@ -371,7 +391,7 @@ TOOL-USE is a list of plists containing tool names, arguments and call results."
                                      id (line-number-at-pos (point))))))))
               ('ignore)
               ('nil                     ; user role: possibly with media
-               (if include-media
+               (if gptel-track-media
                    (when-let* ((content (gptel--anthropic-parse-multipart
                                          (gptel--parse-media-links major-mode (point) prev-pt))))
                      (when (> (length content) 0)
@@ -438,6 +458,12 @@ format."
      ,@(and (gptel--model-capable-p 'cache)
         '(:cache_control (:type "ephemeral"))))
    into parts-array
+   else if (plist-get part :textfile) collect
+   `(:type "text"
+     :text ,(with-temp-buffer
+              (gptel--insert-file-string (plist-get part :textfile))
+              (buffer-string)))
+   into parts-array
    finally return (vconcat parts-array)))
 
 (cl-defmethod gptel--wrap-user-prompt ((_backend gptel-anthropic) prompts
@@ -485,6 +511,22 @@ files in the context."
      :input-cost 3
      :output-cost 15
      :cutoff-date "2025-02")
+    (claude-sonnet-4-20250514
+     :description "High-performance model with exceptional reasoning and efficiency"
+     :capabilities (media tool-use cache)
+     :mime-types ("image/jpeg" "image/png" "image/gif" "image/webp" "application/pdf")
+     :context-window 200
+     :input-cost 3
+     :output-cost 15
+     :cutoff-date "2025-03")
+    (claude-opus-4-20250514
+     :description "Most capable model for complex reasoning and advanced coding"
+     :capabilities (media tool-use cache)
+     :mime-types ("image/jpeg" "image/png" "image/gif" "image/webp" "application/pdf")
+     :context-window 200
+     :input-cost 15
+     :output-cost 75
+     :cutoff-date "2025-03")
     (claude-3-5-sonnet-20241022
      :description "Highest level of intelligence and capability"
      :capabilities (media tool-use cache)
@@ -554,7 +596,7 @@ Keys:
 Information about the Anthropic models was obtained from the following
 comparison table:
 
-<https://docs.anthropic.com/en/docs/about-claude/models#model-comparison-table>")
+URL `https://docs.anthropic.com/en/docs/about-claude/models#model-comparison-table'")
 
 ;;;###autoload
 (cl-defun gptel-make-anthropic
@@ -639,3 +681,8 @@ for."
 
 (provide 'gptel-anthropic)
 ;;; gptel-anthropic.el ends here
+
+;; Local Variables:
+;; byte-compile-warnings: (not docstrings)
+;; End:
+
