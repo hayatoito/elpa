@@ -14,19 +14,21 @@
 (autoload 'gptel-aibo-mode "gptel-aibo" "\
 Minor mode for `gptel-aibo' interacting with LLMs.
 
-This is a minor mode.  If called interactively, toggle the
-`GPTel-Aibo mode' mode.  If the prefix argument is positive,
-enable the mode, and if it is zero or negative, disable the mode.
+This is a minor mode.  If called interactively, toggle the `GPTel-Aibo
+mode' mode.  If the prefix argument is positive, enable the mode, and if
+it is zero or negative, disable the mode.
 
-If called from Lisp, toggle the mode if ARG is `toggle'.  Enable
-the mode if ARG is nil, omitted, or is a positive number.
-Disable the mode if ARG is a negative number.
+If called from Lisp, toggle the mode if ARG is `toggle'.  Enable the
+mode if ARG is nil, omitted, or is a positive number.  Disable the mode
+if ARG is a negative number.
 
 To check whether the minor mode is enabled in the current buffer,
-evaluate `gptel-aibo-mode'.
+evaluate the variable `gptel-aibo-mode'.
 
-The mode's hook is called both when the mode is enabled and when
-it is disabled.
+The mode's hook is called both when the mode is enabled and when it is
+disabled.
+
+\\{gptel-aibo-mode-map}
 
 (fn &optional ARG)" t)
 (autoload 'gptel-aibo "gptel-aibo" "\
@@ -52,19 +54,20 @@ The response is inserted as an overlay with these keybindings:
 Minor mode `gptel-aibo' llm completions.
 
 This is a minor mode.  If called interactively, toggle the
-`GPTel-Aibo-Complete mode' mode.  If the prefix argument is
-positive, enable the mode, and if it is zero or negative, disable
-the mode.
+`GPTel-Aibo-Complete mode' mode.  If the prefix argument is positive,
+enable the mode, and if it is zero or negative, disable the mode.
 
-If called from Lisp, toggle the mode if ARG is `toggle'.  Enable
-the mode if ARG is nil, omitted, or is a positive number.
-Disable the mode if ARG is a negative number.
+If called from Lisp, toggle the mode if ARG is `toggle'.  Enable the
+mode if ARG is nil, omitted, or is a positive number.  Disable the mode
+if ARG is a negative number.
 
 To check whether the minor mode is enabled in the current buffer,
-evaluate `gptel-aibo-complete-mode'.
+evaluate the variable `gptel-aibo-complete-mode'.
 
-The mode's hook is called both when the mode is enabled and when
-it is disabled.
+The mode's hook is called both when the mode is enabled and when it is
+disabled.
+
+\\{gptel-aibo-complete-mode-map}
 
 (fn &optional ARG)" t)
 (register-definition-prefixes "gptel-aibo" '("gptel-aibo-"))
@@ -112,6 +115,11 @@ Summon AIBO to assist with code completion at point.
 This function initiates an asynchronous completion request using
 the current buffer's content and position." t)
 (register-definition-prefixes "gptel-aibo-summon" '("gptel-aibo-"))
+
+
+;;; Generated autoloads from gptel-aibo-tools.el
+
+(register-definition-prefixes "gptel-aibo-tools" '("gptel-aibo-tools--project-root"))
 
 ;;; End of scraped data
 
