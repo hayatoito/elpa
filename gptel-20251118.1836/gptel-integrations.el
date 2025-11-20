@@ -58,7 +58,8 @@ considered.
 If INTERACTIVE is non-nil (or called interactively), guide the user
 through setting up mcp, and query for servers to retrieve tools from.
 
-Call SERVER-CALLBACK after starting MCP servers."
+Call SERVER-CALLBACK after starting MCP servers.  If SERVER-CALLBACK is
+not a function and non-nil, start SERVERS synchronously."
   (interactive (list nil nil t))
   (if (locate-library "mcp-hub")
       (unless (require 'mcp-hub nil t)
@@ -98,7 +99,8 @@ Call SERVER-CALLBACK after starting MCP servers."
                  (add-all-tools
                   (lambda (&optional server-names)
                     "Register and add tools from servers.  Report failures."
-                    (let ((tools (gptel-mcp--get-tools server-names))
+                    (let ((tools (gptel-mcp--get-tools
+                                  (or server-names (mapcar #'car inactive-servers))))
                           (now-active (cl-remove-if-not server-active-p mcp-hub-servers)))
                       (mapc (lambda (tool) (apply #'gptel-make-tool tool)) tools)
                       (gptel-mcp--activate-tools tools)
@@ -119,10 +121,11 @@ Call SERVER-CALLBACK after starting MCP servers."
                       (when (functionp server-callback) (funcall server-callback))))))
 
             (if inactive-servers        ;start servers
-                (mcp-hub-start-all-server
-                 add-all-tools (mapcar #'car inactive-servers))
+                (let ((syncp (and server-callback (not (functionp server-callback)) t)))
+                  (mcp-hub-start-all-server
+                   add-all-tools (mapcar #'car inactive-servers) syncp))
               (funcall add-all-tools (mapcar #'car servers))))
-        (message "All MCP tools are already available to gptel!")
+        (when interactive (message "All MCP tools are already available to gptel!"))
         (when (functionp server-callback) (funcall server-callback))))))
 
 (defun gptel-mcp-disconnect (&optional servers interactive)
