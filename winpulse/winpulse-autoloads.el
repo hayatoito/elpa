@@ -11,6 +11,32 @@
 
 ;;; Generated autoloads from winpulse.el
 
+(defvar winpulse-mode nil "\
+Non-nil if Winpulse mode is enabled.
+See the `winpulse-mode' command
+for a description of this minor mode.
+Setting this variable directly does not take effect;
+either customize it (see the info node `Easy Customization')
+or call the function `winpulse-mode'.")
+(custom-autoload 'winpulse-mode "winpulse" nil)
+(autoload 'winpulse-mode "winpulse" "\
+Flash the focused window background whenever window focus changes.
+
+This is a global minor mode.  If called interactively, toggle the
+`Winpulse mode' mode.  If the prefix argument is positive, enable the
+mode, and if it is zero or negative, disable the mode.
+
+If called from Lisp, toggle the mode if ARG is `toggle'.  Enable the
+mode if ARG is nil, omitted, or is a positive number.  Disable the mode
+if ARG is a negative number.
+
+To check whether the minor mode is enabled in the current buffer,
+evaluate `(default-value \\='winpulse-mode)'.
+
+The mode's hook is called both when the mode is enabled and when it is
+disabled.
+
+(fn &optional ARG)" t)
 (register-definition-prefixes "winpulse" '("winpulse-"))
 
 ;;; End of scraped data

@@ -2,7 +2,7 @@
 
 ;; Copyright (C) 2026 Alvaro Ramirez
 
-;; Author: Alvaro Ramirez https://xenodium.com
+;; Author: Alvaro Ramirez <https://xenodium.com>
 ;; Package-Requires: ((emacs "28.1"))
 ;; URL: https://github.com/xenodium/winpulse
 ;; Version: 0.0.1
@@ -29,6 +29,9 @@
 
 ;;; Code:
 
+(eval-when-compile
+  (require 'cl-lib))
+(require 'face-remap)
 (require 'map)
 
 (defgroup winpulse nil
@@ -63,6 +66,7 @@
 (defvar winpulse--last-selected-window nil
   "The previously selected window, used to detect actual changes.")
 
+;;;###autoload
 (define-minor-mode winpulse-mode
   "Flash the focused window background whenever window focus changes."
   :global t
