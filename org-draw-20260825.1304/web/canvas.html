@@ -1,0 +1,580 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#101114">
+<title>OrgDraw</title>
+
+<link rel="stylesheet" href="https://esm.sh/tldraw@3.15.1/tldraw.css">
+
+<!-- No-build ES module import map (needs internet the first load; the loader below shows a clear message offline). -->
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@18.3.1",
+    "react-dom": "https://esm.sh/react-dom@18.3.1",
+    "react-dom/client": "https://esm.sh/react-dom@18.3.1/client",
+    "react/jsx-runtime": "https://esm.sh/react@18.3.1/jsx-runtime",
+    "tldraw": "https://esm.sh/tldraw@3.15.1?external=react,react-dom&deps=react@18.3.1,react-dom@18.3.1"
+  }
+}
+</script>
+
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --panel: rgba(255,255,255,0.72);
+    --panel-stroke: rgba(0,0,0,0.06);
+    --panel-shadow: rgba(0,0,0,0.16);
+    --text: #14161a;
+    --text-dim: #5b6069;
+    --accent: #0a84ff;
+    --accent-ink: #ffffff;
+    --hairline: rgba(0,0,0,0.10);
+    --safe-t: env(safe-area-inset-top, 0px);
+    --safe-b: env(safe-area-inset-bottom, 0px);
+    --safe-l: env(safe-area-inset-left, 0px);
+    --safe-r: env(safe-area-inset-right, 0px);
+  }
+  html[data-theme="dark"] {
+    --bg: #0b0d10;
+    --panel: rgba(28,30,36,0.72);
+    --panel-stroke: rgba(255,255,255,0.10);
+    --panel-shadow: rgba(0,0,0,0.5);
+    --text: #eef0f3;
+    --text-dim: #9aa0ac;
+    --hairline: rgba(255,255,255,0.12);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0; height: 100%; width: 100%;
+    overflow: hidden; overscroll-behavior: none;
+    background: var(--bg); color: var(--text);
+    font: 15px/1.3 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  #tldraw { position: fixed; inset: 0; }
+
+  .glass {
+    background: var(--panel);
+    -webkit-backdrop-filter: blur(24px) saturate(1.7);
+    backdrop-filter: blur(24px) saturate(1.7);
+    border: 1px solid var(--panel-stroke);
+    box-shadow: 0 8px 30px var(--panel-shadow), inset 0 1px 0 rgba(255,255,255,0.25);
+    border-radius: 16px;
+  }
+
+  /* OrgDraw's Done/Cancel/style buttons reuse tldraw's own tlui-button styling
+     so they match the native chrome; we only lay them out and size the icons. */
+  .orgdraw-share { display: flex; align-items: center; gap: 2px; pointer-events: all; padding-right: 2px; }
+  .orgdraw-share svg { width: 18px; height: 18px; display: block; }
+  .orgdraw-share .orgdraw-done { font-weight: 600; }
+  #tldraw.orgdraw-hide-style .tlui-style-panel__wrapper { display: none !important; }
+
+  /* Overlay screens (pairing / waiting / done / load error) */
+  .overlay {
+    position: fixed; inset: 0; z-index: 1000;
+    display: flex; align-items: center; justify-content: center; padding: 24px;
+    background: var(--bg);
+  }
+  .overlay[hidden] { display: none; }
+  .card {
+    width: min(340px, 100%); text-align: center;
+    display: flex; flex-direction: column; align-items: stretch; gap: 12px;
+  }
+  .card h1 { margin: 0 0 2px; font-size: 22px; font-weight: 600; color: var(--text); }
+  .card p.hint { margin: 0; font-size: 14px; color: var(--text-dim); line-height: 1.45; }
+  .card code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 13px;
+    background: rgba(127,127,127,0.14); padding: 1px 5px; border-radius: 5px; }
+  .card .origin { font-size: 12px; color: var(--text-dim); font-variant-numeric: tabular-nums; word-break: break-all; }
+  #pairCode {
+    -webkit-appearance: none; appearance: none; width: 100%; box-sizing: border-box;
+    font: 500 24px/1.2 ui-monospace, "SF Mono", Menlo, monospace;
+    letter-spacing: 6px; text-align: center; padding: 14px 8px 14px 14px; margin-top: 4px;
+    border-radius: 12px; border: 1px solid var(--hairline);
+    background: transparent; color: var(--text);
+  }
+  #pairCode:focus { outline: none; border-color: var(--accent); }
+  #pairCode::placeholder { color: var(--text-dim); opacity: .5; letter-spacing: 6px; }
+  .card .err { min-height: 16px; font-size: 13px; font-weight: 500; color: #ff453a; }
+  .card button.primary {
+    -webkit-appearance: none; appearance: none; width: 100%; padding: 13px 18px;
+    border-radius: 12px; border: none; background: var(--accent); color: #fff;
+    font: 600 15px/1 -apple-system, system-ui, sans-serif; cursor: pointer;
+  }
+  .card button.primary:active { opacity: .9; }
+  .card button.ghost {
+    -webkit-appearance: none; appearance: none; align-self: center; margin-top: 4px;
+    padding: 8px 14px; border-radius: 10px; border: none; background: transparent;
+    color: var(--text-dim); font: 500 14px/1 -apple-system, system-ui, sans-serif; cursor: pointer;
+  }
+  .card button.ghost:hover { color: var(--text); }
+  .spinner {
+    width: 30px; height: 30px; border-radius: 50%; align-self: center;
+    border: 3px solid var(--hairline); border-top-color: var(--accent);
+    animation: orgdraw-spin 0.9s linear infinite;
+  }
+  @keyframes orgdraw-spin { to { transform: rotate(360deg); } }
+
+  #toast {
+    position: fixed; left: 50%; transform: translateX(-50%);
+    top: calc(var(--safe-t) + 62px); padding: 10px 16px; border-radius: 14px;
+    z-index: 1200; font-weight: 600; opacity: 0; pointer-events: none;
+    transition: opacity .2s ease; max-width: 80vw; text-align: center;
+  }
+  #toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+  <div id="tldraw"></div>
+
+  <!-- OrgDraw's Done/Cancel + style toggle are injected into tldraw's own
+       top-right chrome (SharePanel) from the module below, so they read as
+       part of the app rather than a separate floating bar. -->
+
+  <div id="toast" class="glass"></div>
+
+  <div id="screenLoading" class="overlay">
+    <div class="card">
+      <div class="spinner"></div>
+      <h1>Loading</h1>
+      <p class="hint">Fetching the drawing engine.</p>
+    </div>
+  </div>
+
+  <div id="screenError" class="overlay" hidden>
+    <div class="card">
+      <h1>Can't load the canvas</h1>
+      <p class="hint" id="errorHint">The drawing engine didn't load. This page needs internet the first time it opens. Check the connection and reload.</p>
+      <button class="primary" onclick="location.reload()">Reload</button>
+    </div>
+  </div>
+
+  <div id="screenPairing" class="overlay" hidden>
+    <div class="card">
+      <h1>Enter your code</h1>
+      <p class="hint">Emacs shows a 6-digit code after you run <code>M-x org-draw-setup</code>.</p>
+      <input id="pairCode" inputmode="numeric" pattern="[0-9]*" maxlength="6"
+             autocomplete="one-time-code" placeholder="000000" aria-label="pairing code">
+      <p class="err" id="pairError"></p>
+      <button class="primary" id="btnPair">Connect</button>
+    </div>
+  </div>
+
+  <div id="screenWaiting" class="overlay" hidden>
+    <div class="card">
+      <div class="spinner"></div>
+      <h1>Ready</h1>
+      <p class="hint">Keep this tab open. Run <code>M-x org-draw</code> in Emacs and your drawing shows up here.</p>
+      <p class="origin" id="waitingOrigin"></p>
+      <button class="ghost" id="btnUnpair">Disconnect</button>
+    </div>
+  </div>
+
+  <div id="screenDone" class="overlay" hidden>
+    <div class="card">
+      <h1 id="doneTitle">Sent</h1>
+      <p class="hint" id="doneHint">This tab was opened for one figure. You can close it.</p>
+    </div>
+  </div>
+
+<script type="module">
+// OrgDraw web canvas (tldraw edition). tldraw is the drawing surface (pressure
+// ink, pan/zoom, palm rejection, shapes, undo/redo); this file is the glue that
+// mounts it and drives the OrgDraw receiver protocol
+// (pair -> long-poll /session -> export PNG + snapshot -> POST /result).
+// The exported figure's re-editable data is a tldraw store snapshot (JSON),
+// carried in the same opaque "drawing" slot the server already round-trips.
+
+let Tldraw, getSnapshot, loadSnapshot, React, createRoot;
+try {
+  React = (await import("react")).default;
+  ({ createRoot } = await import("react-dom/client"));
+  ({ Tldraw, getSnapshot, loadSnapshot } = await import("tldraw"));
+} catch (err) {
+  document.getElementById("screenLoading").hidden = true;
+  var eh = document.getElementById("errorHint");
+  if (eh) eh.textContent = "The drawing engine failed to load (" + (err && err.message || err) + "). This page needs internet on this device the first time. Check the connection and reload.";
+  document.getElementById("screenError").hidden = false;
+  throw err;
+}
+
+var rawCfg = window.ORGDRAW_CONFIG || {};
+var qs = new URLSearchParams(location.search);
+rawCfg = {
+  token_header: rawCfg.token_header,
+  pair_path: rawCfg.pair_path,
+  session_path: rawCfg.session_path,
+  result_path: rawCfg.result_path,
+  cancel_path: rawCfg.cancel_path,
+  session_id: rawCfg.session_id || qs.get("session") || qs.get("session_id") || null,
+  token: rawCfg.token || qs.get("token") || null,
+  // Defaults for mode/name/background are owned solely by resolveConfig; here
+  // we only fold in the URL query-string fallbacks.
+  mode: rawCfg.mode || qs.get("mode"),
+  name: rawCfg.name || qs.get("name"),
+  drawing: (rawCfg.drawing !== undefined && rawCfg.drawing !== null) ? rawCfg.drawing : qs.get("drawing"),
+  background: rawCfg.background || qs.get("background"),
+  resultUrl: rawCfg.resultUrl,
+  require_pairing: rawCfg.require_pairing
+};
+
+var TOKEN_KEY = "orgdraw.token";
+function readStoredToken() { try { return localStorage.getItem(TOKEN_KEY); } catch (e) { return null; } }
+function writeStoredToken(t) { try { if (t) localStorage.setItem(TOKEN_KEY, t); else localStorage.removeItem(TOKEN_KEY); } catch (e) {} }
+
+function resolveConfig(cfg, stored) {
+  cfg = cfg || {};
+  var session_id = cfg.session_id || null;
+  var token = cfg.token || stored || null;
+  // Pairing is only required when the server says so; otherwise skip the code
+  // screen and go straight to receiving.
+  var requirePairing = !!cfg.require_pairing;
+  var screen = session_id ? "drawing"
+             : (token ? "waiting" : (requirePairing ? "pairing" : "waiting"));
+  return {
+    screen: screen, session_id: session_id, token: token,
+    require_pairing: requirePairing,
+    mode: cfg.mode || "new", name: cfg.name || "",
+    drawing: (cfg.drawing != null) ? cfg.drawing : null,
+    background: cfg.background || "transparent",
+    token_header: cfg.token_header || "X-OrgDraw-Token",
+    pair_path: cfg.pair_path || "/pair",
+    session_path: cfg.session_path || "/session",
+    // Prefer the relative /result (same origin the page loaded from) over any
+    // injected absolute resultUrl, which can go stale across an IP change.
+    result_path: cfg.result_path || cfg.resultUrl || "/result",
+    cancel_path: cfg.cancel_path || "/cancel"
+  };
+}
+var CONFIG = resolveConfig(rawCfg, readStoredToken());
+
+// Strip token from the address bar after reading it.
+(function () {
+  try {
+    var u = new URL(location.href);
+    if (u.searchParams.has("token")) {
+      u.searchParams.delete("token");
+      history.replaceState(null, "", u.pathname + (u.search || "") + u.hash);
+    }
+  } catch (e) {}
+})();
+
+// Standalone demo: opened as a file (or ?demo=1). No server, so draw locally,
+// "Done" downloads the PNG. The fastest way to try the canvas.
+var DEMO = (function () {
+  try { return qs.get("demo") === "1" || location.protocol === "file:"; } catch (e) { return false; }
+})();
+if (DEMO) { CONFIG.screen = "drawing"; CONFIG.session_id = "demo"; CONFIG.token = null; CONFIG.mode = "new"; }
+
+function utf8ToB64(s) { var b = new TextEncoder().encode(s), bin = ""; for (var i = 0; i < b.length; i++) bin += String.fromCharCode(b[i]); return btoa(bin); }
+function b64ToUtf8(b) { var bin = atob(b), a = new Uint8Array(bin.length); for (var i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i); return new TextDecoder().decode(a); }
+async function blobToB64(blob) { var a = new Uint8Array(await blob.arrayBuffer()), bin = ""; for (var i = 0; i < a.length; i++) bin += String.fromCharCode(a[i]); return btoa(bin); }
+
+var theme = (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light";
+document.documentElement.setAttribute("data-theme", theme);
+
+var editor = null;
+var pendingLoad;               // snapshot string queued before the editor mounts
+var editorReadyResolvers = [];
+
+function whenEditorReady() {
+  if (editor) return Promise.resolve(editor);
+  return new Promise(function (res) { editorReadyResolvers.push(res); });
+}
+
+function onEditorMount(ed) {
+  editor = ed;
+  try {
+    ed.user.updateUserPreferences({ colorScheme: theme });
+    ed.setCurrentTool("draw");
+  } catch (e) {}
+  if (pendingLoad !== undefined) { applyDrawing(pendingLoad); pendingLoad = undefined; }
+  editorReadyResolvers.splice(0).forEach(function (r) { r(ed); });
+}
+
+function clearCanvas() {
+  if (!editor) return;
+  var ids = Array.from(editor.getCurrentPageShapeIds());
+  if (ids.length) editor.deleteShapes(ids);
+}
+function applyDrawing(snapshotStr) {
+  if (!editor) { pendingLoad = snapshotStr; return; }
+  clearCanvas();
+  if (snapshotStr) {
+    try { loadSnapshot(editor.store, JSON.parse(snapshotStr)); }
+    catch (e) { /* not a tldraw snapshot (or legacy); leave blank */ }
+  }
+  try { editor.zoomToFit({ animation: { duration: 0 } }); } catch (e) {}
+}
+async function exportResult() {
+  await whenEditorReady();
+  var ids = Array.from(editor.getCurrentPageShapeIds());
+  var snapshot = getSnapshot(editor.store);
+  var png = "";
+  if (ids.length) {
+    // Export ink on a transparent background, then bake the requested figure
+    // background underneath. tldraw's toImage `background` is only a boolean,
+    // so it can't honor "light"/"dark"/a custom color; composite it ourselves.
+    var out = await editor.toImage(ids, { format: "png", background: false, scale: 2, padding: 16 });
+    var blob = out.blob;
+    var bg = CONFIG.background;
+    if (bg && bg !== "transparent") {
+      var color = (bg === "light" || bg === "white") ? "#ffffff" : (bg === "dark" ? "#0b0d10" : bg);
+      blob = await bakeBackground(blob, color);
+    }
+    png = await blobToB64(blob);
+  }
+  return { png: png, drawing: JSON.stringify(snapshot), shapes: ids.length };
+}
+async function bakeBackground(blob, color) {
+  var bmp = await createImageBitmap(blob);
+  var c = document.createElement("canvas");
+  c.width = bmp.width; c.height = bmp.height;
+  var g = c.getContext("2d");
+  g.fillStyle = color; g.fillRect(0, 0, c.width, c.height);
+  g.drawImage(bmp, 0, 0);
+  return await new Promise(function (res) { c.toBlob(res, "image/png"); });
+}
+
+function toggleStylePanel() {
+  document.getElementById("tldraw").classList.toggle("orgdraw-hide-style");
+}
+var SLIDERS_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h10M18 6h2M4 12h2M10 12h10M4 18h10M18 18h2"/><circle cx="16" cy="6" r="2" fill="currentColor" stroke="none"/><circle cx="8" cy="12" r="2" fill="currentColor" stroke="none"/><circle cx="16" cy="18" r="2" fill="currentColor" stroke="none"/></svg>';
+var CLOSE_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+
+// OrgDraw's own controls, injected into tldraw's top-right SharePanel zone so
+// they read as native chrome. Buttons keep their ids (btnDone/btnCancel) so the
+// e2e test and any external wiring still find them.
+function OrgDrawShare() {
+  var h = React.createElement;
+  var iconBtn = function (id, title, svg, onClick) {
+    return h("button", { id: id, className: "tlui-button tlui-button__icon", title: title,
+                         "aria-label": title, onClick: onClick,
+                         dangerouslySetInnerHTML: { __html: svg } });
+  };
+  return h("div", { className: "orgdraw-share" },
+    iconBtn("btnStyle", "Show/hide the style panel", SLIDERS_SVG, toggleStylePanel),
+    iconBtn("btnCancel", "Cancel", CLOSE_SVG, function () { cancel(); }),
+    h("button", { id: "btnDone", className: "tlui-button tlui-button__primary orgdraw-done",
+                  onClick: function () { done(); } }, "Done")
+  );
+}
+
+// A tldraw license key (window.ORGDRAW_TLDRAW_LICENSE, or a `tldraw_license`
+// field on the injected config) removes the watermark.
+// Hide the chrome a single-figure tool doesn't need (pages, minimap, debug).
+var LICENSE = (window.ORGDRAW_CONFIG && window.ORGDRAW_CONFIG.tldraw_license) || window.ORGDRAW_TLDRAW_LICENSE || undefined;
+var TL_COMPONENTS = {
+  SharePanel: OrgDrawShare,
+  PageMenu: null,
+  Minimap: null,
+  DebugMenu: null,
+  DebugPanel: null
+};
+createRoot(document.getElementById("tldraw")).render(
+  React.createElement(Tldraw, { onMount: onEditorMount, inferDarkMode: false, licenseKey: LICENSE, components: TL_COMPONENTS })
+);
+
+function el(id) { return document.getElementById(id); }
+// Status lives in the tab title (no persistent on-canvas bar); user-facing
+// transitions still surface as toasts.
+function setStatus(t) { document.title = t ? ("OrgDraw: " + t) : "OrgDraw"; }
+var toastTimer = null;
+function toast(msg) {
+  var t = el("toast"); if (!t) return;
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function () { t.classList.remove("show"); }, 1600);
+}
+var SCREENS = ["screenLoading", "screenError", "screenPairing", "screenWaiting", "screenDone"];
+function showScreen(name) {
+  SCREENS.forEach(function (id) { var e = el(id); if (e) e.hidden = (id !== name); });
+}
+
+var isPerSessionMode = (CONFIG.screen === "drawing" && !DEMO);
+var pollAbort = null, pollGeneration = 0;
+var BACKOFF = [1, 2, 4, 8, 16, 30], backoffIdx = 0;
+function backoffNext() { var v = BACKOFF[Math.min(backoffIdx, BACKOFF.length - 1)]; backoffIdx++; return v; }
+function backoffReset() { backoffIdx = 0; }
+var LONGPOLL_TIMEOUT_MS = 60000;
+
+function enterPairing() {
+  pollGeneration++;
+  if (pollAbort) { try { pollAbort.abort(); } catch (e) {} pollAbort = null; }
+  showScreen("screenPairing");
+  var errEl = el("pairError"); if (errEl) errEl.textContent = "";
+}
+function enterWaiting() {
+  showScreen("screenWaiting");
+  var o = el("waitingOrigin"); if (o) o.textContent = location.origin;
+  // Nothing to disconnect from when pairing isn't required.
+  var unpair = el("btnUnpair"); if (unpair) unpair.hidden = !CONFIG.require_pairing;
+  backoffReset(); startLongPoll();
+}
+function enterDrawingForSession(parsed) {
+  pollGeneration++;
+  if (pollAbort) { try { pollAbort.abort(); } catch (e) {} pollAbort = null; }
+  CONFIG.session_id = parsed.sessionID;
+  CONFIG.mode = parsed.mode;
+  CONFIG.name = parsed.name;
+  CONFIG.background = parsed.background;
+  applyDrawing(parsed.restore || null);
+  setStatus(parsed.mode === "edit" ? ("editing " + (parsed.name || "")) : "new figure");
+  showScreen(null);
+}
+function enterDone() { showScreen("screenDone"); }
+function onSessionFinished() {
+  if (isPerSessionMode) { enterDone(); return; }
+  clearCanvas();
+  enterWaiting();
+}
+function onTokenRejected() {
+  writeStoredToken(null); CONFIG.token = null;
+  if (isPerSessionMode) { enterDone(); return; }
+  enterPairing();
+}
+
+function parseSessionResponse(obj) {
+  var mode = obj.mode || "new";
+  var format = obj.format || "web";
+  var restore = null;
+  // Only web-canvas snapshots are restorable here; a native pkdrawing figure's
+  // bytes are not a tldraw snapshot, so leave the surface blank for those.
+  if (mode === "edit" && obj.drawing && format === "web") {
+    try { restore = b64ToUtf8(obj.drawing); } catch (e) {}
+  }
+  return { sessionID: obj.session_id, mode: mode, name: obj.name || "", background: obj.background || "transparent", restore: restore };
+}
+
+function startLongPoll() { pollOnce(pollGeneration); }
+async function pollOnce(myGen) {
+  if (myGen !== pollGeneration) return;
+  var controller = (typeof AbortController !== "undefined") ? new AbortController() : null;
+  pollAbort = controller;
+  var headers = {}; headers[CONFIG.token_header] = CONFIG.token;
+  var timer = controller ? setTimeout(function () { controller.abort(); }, LONGPOLL_TIMEOUT_MS) : null;
+  var started = Date.now();
+  try {
+    var res = await fetch(CONFIG.session_path, { method: "GET", headers: headers, signal: controller ? controller.signal : undefined });
+    if (timer) clearTimeout(timer);
+    if (myGen !== pollGeneration) return;
+    if (res.status === 200) { var j = await res.json(); backoffReset(); enterDrawingForSession(parseSessionResponse(j)); return; }
+    if (res.status === 204) {
+      backoffReset();
+      // A real long-poll holds ~55s; if the server answered 204 immediately,
+      // throttle to avoid a tight request loop against a non-holding server.
+      if (Date.now() - started < 1000) setTimeout(function () { if (myGen === pollGeneration) pollOnce(myGen); }, 1000);
+      else pollOnce(myGen);
+      return;
+    }
+    if (res.status === 401) { onTokenRejected(); return; }
+    scheduleRetry(myGen);
+  } catch (e) {
+    if (timer) clearTimeout(timer);
+    if (myGen !== pollGeneration) return;
+    scheduleRetry(myGen);
+  }
+}
+function scheduleRetry(myGen) {
+  var d = backoffNext();
+  setTimeout(function () { if (myGen === pollGeneration) pollOnce(myGen); }, d * 1000);
+}
+
+async function submitPair() {
+  var input = el("pairCode"), errEl = el("pairError");
+  var code = input ? input.value.trim() : "";
+  if (errEl) errEl.textContent = "";
+  if (!/^[0-9]{6}$/.test(code)) { if (errEl) errEl.textContent = "Enter the 6-digit code."; return; }
+  var btn = el("btnPair"); if (btn) btn.disabled = true;
+  try {
+    var res = await fetch(CONFIG.pair_path, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: String(code) })
+    });
+    if (res.ok) {
+      var data = await res.json();
+      if (data && data.token) { writeStoredToken(data.token); CONFIG.token = data.token; enterWaiting(); return; }
+    }
+    if (errEl) errEl.textContent = "Wrong or expired code.";
+  } catch (e) {
+    if (errEl) errEl.textContent = "Wrong or expired code.";
+  } finally { if (btn) btn.disabled = false; }
+}
+function doUnpair() {
+  pollGeneration++;
+  if (pollAbort) { try { pollAbort.abort(); } catch (e) {} pollAbort = null; }
+  writeStoredToken(null); CONFIG.token = null; enterPairing();
+}
+
+function downloadDemoPNG(png) {
+  var a = document.createElement("a");
+  a.href = "data:image/png;base64," + png; a.download = "orgdraw-figure.png";
+  document.body.appendChild(a); a.click(); a.remove();
+  toast("Saved orgdraw-figure.png");
+}
+var busy = false;
+async function done() {
+  if (busy) return;
+  busy = true;
+  var btn = el("btnDone"); if (btn) btn.disabled = true;
+  setStatus("exporting...");
+  try {
+    var out = await exportResult();
+    if (!out.shapes) { toast("Draw something first"); setStatus(CONFIG.name ? ("editing " + CONFIG.name) : "new figure"); return; }
+    if (DEMO) { downloadDemoPNG(out.png); setStatus("saved"); return; }
+    if (!CONFIG.session_id) { toast("No active session"); return; }
+    setStatus("uploading...");
+    var headers = { "Content-Type": "application/json" }; headers[CONFIG.token_header] = CONFIG.token;
+    var body = { session_id: CONFIG.session_id, png: out.png, drawing: utf8ToB64(out.drawing), format: "web" };
+    var res = await fetch(CONFIG.result_path, { method: "POST", headers: headers, body: JSON.stringify(body) });
+    if (res.ok) { setStatus("sent"); toast("Sent to Emacs"); onSessionFinished(); }
+    else if (res.status === 401) { setStatus("unauthorized"); toast("Token rejected"); onTokenRejected(); }
+    else { setStatus("error " + res.status); toast("Upload failed (" + res.status + ")"); }
+  } catch (e) {
+    setStatus("error"); toast("Upload failed");
+  } finally { busy = false; if (btn) btn.disabled = false; }
+}
+async function cancel() {
+  if (DEMO) { clearCanvas(); toast("Cleared"); return; }
+  if (!CONFIG.session_id) { toast("Nothing to cancel"); return; }
+  try {
+    var headers = { "Content-Type": "application/json" }; headers[CONFIG.token_header] = CONFIG.token;
+    await fetch(CONFIG.cancel_path, { method: "POST", headers: headers, body: JSON.stringify({ session_id: CONFIG.session_id }) });
+    toast("Cancelled");
+  } catch (e) { toast("Cancel failed"); }
+  onSessionFinished();
+}
+
+// Done/Cancel are wired via onClick in OrgDrawShare (tldraw's SharePanel).
+var pairBtn = el("btnPair"); if (pairBtn) pairBtn.addEventListener("click", submitPair);
+var pairInput = el("pairCode"); if (pairInput) pairInput.addEventListener("keydown", function (e) { if (e.key === "Enter") submitPair(); });
+var unpairBtn = el("btnUnpair"); if (unpairBtn) unpairBtn.addEventListener("click", doUnpair);
+
+// Demo/per-session: draw immediately. Receiver: pair or wait.
+if (CONFIG.screen === "drawing") {
+  if (CONFIG.mode === "edit" && CONFIG.drawing) {
+    var initial = null;
+    try { initial = b64ToUtf8(CONFIG.drawing); } catch (e) { initial = null; }  // malformed drawing => blank, never crash boot
+    applyDrawing(initial);
+    setStatus("editing " + (CONFIG.name || ""));
+  } else { setStatus(DEMO ? "demo" : "new figure"); }
+  showScreen(null);
+} else if (CONFIG.screen === "waiting") {
+  enterWaiting();
+} else {
+  enterPairing();
+}
+
+// Expose for the e2e test / debugging.
+window.__orgdraw = {
+  get editor() { return editor; },
+  CONFIG: CONFIG, exportResult: exportResult,
+  enterDrawingForSession: enterDrawingForSession, onSessionFinished: onSessionFinished,
+  whenEditorReady: whenEditorReady
+};
+</script>
+</body>
+</html>
